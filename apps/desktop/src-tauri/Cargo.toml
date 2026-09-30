@@ -1,0 +1,60 @@
+[package]
+name = "ritmo"
+version = "0.1.0"
+description = "Ritmo — an open-source music player"
+authors = ["Ritmo"]
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+# Tauri 2 builds the app as a library so the mobile targets can link it too.
+name = "ritmo_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+anyhow = "1.0.104"
+base64 = "0.23.1"
+chrono = { version = "0.4.45", features = ["serde"] }
+cpal = "0.17.1"
+dashmap = "6.2.1"
+dirs = "7.0.0"
+futures-util = "0.3.34"
+gtk = "0.18"
+hex = "0.4.3"
+image = "0.25.6"
+lofty = "0.22.2"
+mpris-server = "0.10.0"
+notify = "8.2.0"
+notify-rust = "4.17.0"
+open = "5.4.4"
+parking_lot = "0.12.5"
+rand = "0.9.5"
+rayon = "1.10.0"
+reqwest = { version = "0.13.3", features = ["json", "stream", "gzip", "brotli"] }
+rfd = "0.17.2"
+rubato = "1.0.1"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+sha2 = "0.10.9"
+symphonia = { version = "0.5.5", features = ["all"] }
+tauri = { version = "2", features = ["tray-icon", "protocol-asset", "devtools"] }
+thiserror = "2.0.21"
+tokio = { version = "1.53.1", features = ["full"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+url = "2.5.8"
+walkdir = "2.5.0"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+webkit2gtk = { version = "=2.0.2", features = ["v2_38"] }

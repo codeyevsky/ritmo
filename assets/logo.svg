@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Shallow, so the tile keeps Arch's #1793D1 as its base colour instead of
+         falling away into a dark blue that reads as a black blob at 16px. -->
+    <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0%"   stop-color="#4FC3F7"/>
+      <stop offset="100%" stop-color="#1793D1"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+
+  <!-- Five bars mirrored about the centre: 96 / 208 / 292 / 208 / 96, all
+       centred on y=256. White rather than navy: at icon sizes the mark has to
+       carry its own contrast, and dark-on-mid-blue collapses to a solid shape. -->
+  <g fill="#ffffff">
+    <rect x="112" y="208" width="42" height="96"  rx="21"/>
+    <rect x="178" y="152" width="42" height="208" rx="21"/>
+    <rect x="244" y="110" width="42" height="292" rx="21"/>
+    <rect x="310" y="152" width="42" height="208" rx="21"/>
+    <rect x="376" y="208" width="42" height="96"  rx="21"/>
+  </g>
+</svg>

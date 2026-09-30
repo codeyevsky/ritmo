@@ -1,0 +1,3 @@
+/* The design-system layer owns every token and base rule; this file exists only
+   so Vite has a single CSS entry to graph from. */
+@import '@ritmo/ui/styles.css';

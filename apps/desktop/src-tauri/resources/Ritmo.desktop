@@ -1,0 +1,19 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Ritmo
+GenericName=Music Player
+GenericName[tr]=Müzik Çalar
+Comment=Music player for your local library and open catalogues
+Comment[tr]=Yerel kütüphanen ve açık kataloglar için müzik çalar
+Exec=ritmo %U
+Icon=dev.ritmo.app
+Terminal=false
+Categories=AudioVideo;Audio;Player;Music;
+Keywords=music;player;audio;radio;library;
+Keywords[tr]=müzik;çalar;müzik çalar;radyo;kütüphane;
+MimeType=audio/mpeg;audio/flac;audio/ogg;audio/opus;audio/x-vorbis+ogg;audio/mp4;audio/aac;audio/x-wav;audio/x-aiff;audio/x-wavpack;x-scheme-handler/ritmo;
+StartupNotify=true
+StartupWMClass=dev.ritmo.app
+SingleMainWindow=true
+X-GNOME-UsesNotifications=true

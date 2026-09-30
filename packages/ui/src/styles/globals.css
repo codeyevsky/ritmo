@@ -1,0 +1,394 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+   Tokens. Colours are space separated `R G B` triplets so Tailwind can compose
+   them as `rgb(var(--c-x) / <alpha-value>)` and so the accent can be recomputed
+   from album art at runtime without a rebuild.
+   --------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light;
+
+  --c-bg: 255 255 255;
+  --c-surface: 244 247 250;
+  --c-surface-2: 233 239 245;
+  --c-surface-3: 220 229 238;
+  --c-line: 201 213 224;
+  --c-text: 13 25 38;
+  --c-text-dim: 74 90 107;
+  --c-text-faint: 122 138 155;
+
+  --c-accent: 23 147 209;
+  --c-accent-hover: 56 173 228;
+  --c-on-accent: 3 26 38;
+  --c-danger: 239 83 80;
+  --c-warn: 250 176 5;
+
+  /* Dominant artwork colour; views overwrite it inline for `.hero-fade`. */
+  --hero-rgb: var(--c-surface-3);
+
+  /* Geometry: near-square. Pills and 16px radii are the streaming-app house
+     style; a 2-6px scale reads like a desktop tool instead. */
+  --r-xs: 2px;
+  --r-sm: 3px;
+  --r-md: 4px;
+  --r-lg: 6px;
+  --r-pill: 6px;
+
+  --bar-h: 88px;
+  --title-h: 40px;
+  --sidebar-w: 240px;
+  --sidebar-w-collapsed: 72px;
+  --panel-w: 352px;
+  --ease-swift: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ---------------------------------------------------------------------------
+   Sidebar collapse.
+
+   The shell's first grid column is `var(--sidebar-w)`. Registering the property
+   is what makes it animatable at all — an unregistered custom property has no
+   type to interpolate, so the column would snap. Transitioning the variable
+   rather than `grid-template-columns` also keeps the right panel out of it:
+   opening the panel changes the column *count*, which can only ever be a
+   discrete swap.
+
+   Where the registration is unsupported the declaration is simply ignored and
+   the collapse snaps, exactly as it did before.
+   --------------------------------------------------------------------------- */
+@property --sidebar-w {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 240px;
+}
+
+:root {
+  transition: --sidebar-w 200ms var(--ease-swift);
+}
+
+/* A drag or an arrow-key nudge has to land exactly where the pointer is, so
+   the sidebar turns the transition off for width edits and back on for the
+   collapse toggle. */
+:root[data-sidebar-resize='on'] {
+  transition: none;
+}
+
+/* The system-preference block comes FIRST and the explicit `[data-theme]`
+   blocks come after: `:root:not([data-theme='light'])` also matches an explicit
+   `oled` root, so only later source order guarantees an explicit choice wins. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --c-bg: 11 15 20;
+    --c-surface: 18 24 33;
+    --c-surface-2: 26 34 45;
+    --c-surface-3: 36 48 62;
+    --c-line: 44 58 74;
+    --c-text: 234 241 247;
+    --c-text-dim: 154 170 187;
+    --c-text-faint: 107 123 140;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --c-bg: 11 15 20;
+  --c-surface: 18 24 33;
+  --c-surface-2: 26 34 45;
+  --c-surface-3: 36 48 62;
+  --c-line: 44 58 74;
+  --c-text: 234 241 247;
+  --c-text-dim: 154 170 187;
+  --c-text-faint: 107 123 140;
+}
+
+:root[data-theme='oled'] {
+  color-scheme: dark;
+  --c-bg: 0 0 0;
+  --c-surface: 7 10 14;
+  --c-surface-2: 14 20 27;
+  --c-surface-3: 23 32 43;
+  --c-line: 30 40 51;
+  --c-text: 234 241 247;
+  --c-text-dim: 154 170 187;
+  --c-text-faint: 107 123 140;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --c-bg: 255 255 255;
+  --c-surface: 244 247 250;
+  --c-surface-2: 233 239 245;
+  --c-surface-3: 220 229 238;
+  --c-line: 201 213 224;
+  --c-text: 13 25 38;
+  --c-text-dim: 74 90 107;
+  --c-text-faint: 122 138 155;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    /* `body` is already clipped; the root has to be too, or an element that
+       escapes its column scrolls the document sideways instead of being cut. */
+    overflow: hidden;
+  }
+
+  body {
+    margin: 0;
+    /* The WebView paints its own ground behind the document, so the background
+       has to be explicit or the page borrows the host's colour. */
+    background: rgb(var(--c-bg));
+    color: rgb(var(--c-text));
+    font-family: InterVariable, Inter, system-ui, sans-serif;
+    font-feature-settings: 'cv11', 'ss01';
+    font-synthesis-weight: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  /* Safety net for anything that does not opt into a ring of its own. */
+  *:focus-visible {
+    outline: 2px solid rgb(var(--c-accent));
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: rgb(var(--c-accent) / 0.28);
+    color: rgb(var(--c-text));
+  }
+
+  /* App chrome, not a document. Selecting a row's title while dragging through
+     a list is never what the user meant. */
+  body {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  input,
+  textarea,
+  [contenteditable='true'],
+  .selectable,
+  .selectable * {
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: auto;
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+
+  button,
+  [role='button'] {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  img {
+    -webkit-user-drag: none;
+  }
+}
+
+@layer utilities {
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Section label: small mono caps with a hairline running to the edge, in
+     place of a large bold heading. */
+  .rule-label {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-family: ui-monospace, 'InterVariable', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgb(var(--c-text-faint));
+  }
+
+  .rule-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgb(var(--c-line));
+  }
+
+  /* Tiles are outlined, not filled and floated. */
+  .tile {
+    border: 1px solid rgb(var(--c-line));
+    background: transparent;
+    transition:
+      border-color 150ms var(--ease-swift),
+      background-color 150ms var(--ease-swift);
+  }
+
+  .tile:hover,
+  .tile:focus-within {
+    border-color: rgb(var(--c-accent) / 0.55);
+    background: rgb(var(--c-surface-2) / 0.6);
+  }
+
+  /* The active-row marker, borrowed from editor gutters rather than from a
+     filled pill. */
+  .gutter-mark {
+    position: relative;
+  }
+
+  .gutter-mark::before {
+    content: '';
+    position: absolute;
+    inset-block: 6px;
+    left: 0;
+    width: 2px;
+    border-radius: 1px;
+    background: rgb(var(--c-accent));
+  }
+
+  /* Indices, durations and bitrates line up in columns. */
+  .mono {
+    font-family: ui-monospace, 'InterVariable', monospace;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  /* Window dragging: the title bar is the drag region, its controls are not. */
+  .drag-region {
+    app-region: drag;
+    -webkit-app-region: drag;
+  }
+
+  .no-drag {
+    app-region: no-drag;
+    -webkit-app-region: no-drag;
+  }
+
+  /* Invisible until the container is hovered, so long lists stay quiet.
+     WebKitGTK honours the -webkit-scrollbar pseudo-elements. */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+
+  .scrollbar-thin:hover {
+    scrollbar-color: rgb(var(--c-text-faint) / 0.5) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track,
+  .scrollbar-thin::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border: 4px solid transparent;
+    border-radius: 9999px;
+    background-clip: content-box;
+    transition: background-color 160ms var(--ease-swift);
+  }
+
+  .scrollbar-thin:hover::-webkit-scrollbar-thumb {
+    background-color: rgb(var(--c-text-faint) / 0.45);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(var(--c-text-dim) / 0.75);
+  }
+
+  /* Artwork colour bleeding into the page background behind an entity hero. */
+  .hero-fade {
+    background-image: linear-gradient(
+      to bottom,
+      rgb(var(--hero-rgb) / 0.92) 0%,
+      rgb(var(--hero-rgb) / 0.42) 48%,
+      rgb(var(--c-bg)) 100%
+    );
+  }
+
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+
+  .shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+      90deg,
+      rgb(var(--c-text) / 0),
+      rgb(var(--c-text) / 0.07),
+      rgb(var(--c-text) / 0)
+    );
+    animation: ritmo-shimmer 1.6s var(--ease-swift) infinite;
+  }
+
+  .marquee-run {
+    animation: ritmo-marquee var(--marquee-duration, 12s) linear infinite;
+    will-change: transform;
+  }
+
+  /* Sidebar labels lead the collapse: the text is gone before the rail's width
+     lands, so it never snaps out from under a half-shrunk column. The flag is
+     transient — a settled rail renders no labels at all — which is why this can
+     reach for every text node in the tree without hiding the icon rail's own
+     state markers. */
+  .sidebar-labels :is(span, p) {
+    transition: opacity 140ms var(--ease-swift);
+  }
+
+  .sidebar-labels[data-labels='hidden'] :is(span, p) {
+    opacity: 0;
+  }
+}
+
+@keyframes ritmo-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes ritmo-marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* A frozen sheen reads as a rendering glitch; fall back to a flat tint. */
+  .shimmer::after {
+    display: none;
+  }
+}

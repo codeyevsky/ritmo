@@ -1,0 +1,85 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Ritmo",
+  "version": "0.1.0",
+  "identifier": "dev.ritmo.app",
+  "build": {
+    "beforeDevCommand": "pnpm --filter @ritmo/web dev",
+    "devUrl": "http://localhost:5273",
+    "beforeBuildCommand": "pnpm --filter @ritmo/web build",
+    "frontendDist": "../../web/dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "title": "Ritmo",
+        "label": "main",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 720,
+        "minHeight": 480,
+        "resizable": true,
+        "center": true,
+        "decorations": false,
+        "transparent": false,
+        "dragDropEnabled": true,
+        "theme": "Dark",
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data: blob: https:; media-src 'self' asset: http://asset.localhost data: blob: https: http:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' ipc: http://ipc.localhost https: http:; script-src 'self'",
+      "assetProtocol": {
+        "enable": true,
+        "scope": {
+          "allow": [
+            "$HOME/**",
+            "$AUDIO/**",
+            "$APPCACHE/**",
+            "$APPDATA/**"
+          ],
+          "deny": [
+            "$HOME/.ssh/**",
+            "$HOME/.gnupg/**"
+          ]
+        }
+      }
+    },
+    "trayIcon": {
+      "id": "main",
+      "iconPath": "icons/32x32.png",
+      "iconAsTemplate": false,
+      "tooltip": "Ritmo",
+      "menuOnLeftClick": false
+    },
+    "enableGTKAppId": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "deb",
+      "rpm",
+      "appimage"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "Music",
+    "shortDescription": "Open-source music player",
+    "longDescription": "Ritmo brings your local music library together with open catalogues such as Audius, Jamendo, Internet Archive and Radio Browser in a single interface, with gapless playback, a 10-band equaliser and MPRIS support.",
+    "linux": {
+      "deb": {
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libgtk-3-0",
+          "libasound2"
+        ]
+      }
+    }
+  }
+}

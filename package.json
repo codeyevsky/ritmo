@@ -1,0 +1,22 @@
+{
+  "name": "ritmo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Ritmo — açık kaynaklı, çok platformlu müzik çalar",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm --filter @ritmo/web dev",
+    "build:web": "pnpm --filter @ritmo/core build && pnpm --filter @ritmo/ui build && pnpm --filter @ritmo/web build",
+    "dev:desktop": "pnpm --filter @ritmo/desktop dev",
+    "build:desktop": "pnpm build:web && pnpm --filter @ritmo/desktop build",
+    "typecheck": "pnpm -r --parallel typecheck",
+    "lint": "pnpm -r --parallel lint",
+    "test": "pnpm -r --parallel test",
+    "clean": "rm -rf node_modules packages/*/dist apps/*/dist apps/desktop/src-tauri/target"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

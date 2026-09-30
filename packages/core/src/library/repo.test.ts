@@ -415,6 +415,41 @@ describe('setTrackAlbum', () => {
   });
 });
 
+describe('removeTracks and play history', () => {
+  beforeEach(async () => {
+    await repo.upsertTracks([track('a', { title: 'Played' })]);
+    await host.db.execute(
+      `INSERT INTO play_history (track_uri, track_json, played_at, played_ms, reason, completed)
+       VALUES (?, ?, ?, ?, 'user', 1)`,
+      ['local:track:a', JSON.stringify({ uri: 'local:track:a', title: 'Played' }), NOW, 120_000],
+    );
+  });
+
+  it('clears the history rows, so a removed track leaves the home shelves', async () => {
+    await repo.removeTracks(['local:track:a']);
+
+    const rows = await host.db.query(
+      'SELECT COUNT(*) AS n FROM play_history WHERE track_uri = ?',
+      ['local:track:a'],
+    );
+    expect(Number(rows[0]?.n)).toBe(0);
+  });
+
+  it('leaves the history of a track it was not asked to remove', async () => {
+    await repo.upsertTracks([track('b', { title: 'Kept' })]);
+    await host.db.execute(
+      `INSERT INTO play_history (track_uri, track_json, played_at, played_ms, reason, completed)
+       VALUES (?, ?, ?, ?, 'user', 1)`,
+      ['local:track:b', JSON.stringify({ uri: 'local:track:b', title: 'Kept' }), NOW, 1000],
+    );
+
+    await repo.removeTracks(['local:track:a']);
+
+    const rows = await host.db.query('SELECT track_uri FROM play_history');
+    expect(rows.map((r) => String(r.track_uri))).toEqual(['local:track:b']);
+  });
+});
+
 describe('vacuumOrphans', () => {
   async function albumUris(): Promise<string[]> {
     const rows = await host.db.query('SELECT uri FROM albums ORDER BY uri ASC');

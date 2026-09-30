@@ -545,6 +545,14 @@ export class Repo {
         sql: `DELETE FROM likes WHERE kind = 'track' AND uri IN (${list})`,
         params: [...group],
       });
+      // History keeps a full snapshot of what was played, so leaving these rows
+      // behind kept a removed track on the home screen under "most played" and
+      // "jump back in", where clicking it would try to play something that no
+      // longer exists.
+      statements.push({
+        sql: `DELETE FROM play_history WHERE track_uri IN (${list})`,
+        params: [...group],
+      });
       statements.push({ sql: `DELETE FROM tracks WHERE uri IN (${list})`, params: [...group] });
     }
 

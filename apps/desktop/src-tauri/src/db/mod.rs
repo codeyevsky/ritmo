@@ -255,6 +255,46 @@ mod tests {
     }
 
     #[test]
+    fn migration_four_prunes_only_orphaned_local_history() {
+        let db = db();
+        insert_track(&db, "local:track:kept", "Kept", "A", "Album");
+        for (uri, json_uri) in [
+            ("local:track:kept", "local:track:kept"),
+            ("local:track:gone", "local:track:gone"),
+            ("audius:track:remote", "audius:track:remote"),
+            ("radio:stream:somafm", "radio:stream:somafm"),
+        ] {
+            db.execute_json(
+                "INSERT INTO play_history(track_uri, track_json, played_at, played_ms, reason) \
+                 VALUES (?1, ?2, 0, 1000, 'user')",
+                &[json!(uri), json!(json!({ "uri": json_uri, "title": "T" }).to_string())],
+            )
+            .expect("insert history");
+        }
+
+        // Rewind past migration 4 and let it run again over the rows above.
+        let conn = db.conn.lock();
+        conn.execute_batch("PRAGMA user_version = 3").expect("rewind");
+        schema::migrate(&conn).expect("re-migrate");
+        drop(conn);
+
+        let mut left = db
+            .query_json("SELECT track_uri FROM play_history", &[])
+            .expect("history")
+            .into_iter()
+            .filter_map(|row| match row.get("track_uri") {
+                Some(JsonValue::String(s)) => Some(s.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        left.sort();
+        assert_eq!(
+            left,
+            vec!["audius:track:remote", "local:track:kept", "radio:stream:somafm"]
+        );
+    }
+
+    #[test]
     fn migration_reaches_latest_version_and_is_idempotent() {
         let db = db();
         let latest = schema::latest_version();

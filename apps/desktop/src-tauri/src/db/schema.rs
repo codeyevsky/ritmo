@@ -18,9 +18,21 @@ pub const MIGRATIONS: &[&str] = &[
     MIGRATION_0002_TRACK_EDITS,
     // 3 — packs and the Bazaar, verbatim from docs/packs.md.
     MIGRATION_0003_PACKS,
+    // 4 — one time repair. Removing a track from the library used to leave its
+    // play history behind, and history carries a full snapshot of the track, so
+    // the home shelves kept drawing songs the library no longer held. Only
+    // local rows are pruned: a track played from a provider never had a row in
+    // `tracks`, so its history is not orphaned, it is all there ever was.
+    MIGRATION_0004_ORPHAN_HISTORY,
 ];
 
 const MIGRATION_0002_TRACK_EDITS: &str = "ALTER TABLE tracks ADD COLUMN edited_json TEXT";
+
+const MIGRATION_0004_ORPHAN_HISTORY: &str = r#"
+DELETE FROM play_history
+ WHERE track_uri LIKE 'local:%'
+   AND track_uri NOT IN (SELECT uri FROM tracks);
+"#;
 
 const MIGRATION_0003_PACKS: &str = r#"
 CREATE TABLE IF NOT EXISTS packs (

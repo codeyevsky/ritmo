@@ -1,77 +1,89 @@
 <h1 align="center">Ritmo</h1>
-<p align="center">Açık kaynaklı, çok platformlu müzik çalar — masaüstü (Tauri 2) ve mobil (Capacitor), tek kod tabanı.</p>
+<p align="center">A music player for your own files and for freely licensed catalogues. Desktop and mobile, one codebase.</p>
 
 ---
 
-## Ne yapar
+## What it is
 
-Ritmo, yerel müzik kütüphanenizi ve **özgürce dinlenebilir açık katalogları** tek
-bir arayüzde birleştirir. Kapalı bir servise bağımlı değildir; hesap açmanız
-gerekmez.
+Ritmo plays your local music library alongside catalogues that are free to
+listen to. It is not a client for a closed service: there is no account, no
+telemetry, and it works offline.
 
-| Kaynak | Ne sağlar |
+| Source | What it gives you |
 |---|---|
-| **Bilgisayarım** | Klasör tarama, ID3/Vorbis/MP4 etiket okuma, gömülü kapak çıkarma, dosya sistemi izleme |
-| **Audius** | Bağımsız sanatçıların katalogu, trend listeleri, benzer şarkı radyosu |
-| **Jamendo** | Creative Commons lisanslı ~600k parça (ücretsiz `client_id` gerekir) |
-| **Internet Archive** | Canlı kayıt arşivi (etree), 78'lik plaklar, telifsiz müzik |
-| **Radio Browser** | 50.000+ internet radyosu, ülke ve tür filtreleriyle |
+| **This computer** | Folder scanning, ID3 and Vorbis and MP4 tag reading, embedded cover extraction, filesystem watching |
+| **Audius** | Independent artists, trending lists, song radio |
+| **Jamendo** | Around 600k Creative Commons tracks (needs a free client id) |
+| **Internet Archive** | Live concert recordings, 78rpm transfers, public domain music |
+| **Radio Browser** | Over 50,000 internet radio stations by country and by genre |
 
-Zenginleştirme: **MusicBrainz** (künye), **Cover Art Archive** (kapak),
-**LRCLIB** (senkron şarkı sözleri), **Last.fm** (scrobble).
+Enrichment comes from **MusicBrainz** (credits), **Cover Art Archive**
+(artwork), **LRCLIB** (synced lyrics) and **Last.fm** (scrobbling).
 
-## Öne çıkanlar
+## Notable parts
 
-- **Rust ses motoru** — symphonia ile çözümleme, cpal ile çıkış: gerçek *gapless*
-  geçiş, eşit-güçlü *crossfade*, örnek hassasiyetinde arama
-- **10 bantlı ekolayzır** + ReplayGain ses seviyesi eşitleme + preamp
-- **MPRIS** entegrasyonu — GNOME medya widget'ı, kilit ekranı, `playerctl` ve
-  klavyenin medya tuşları doğrudan çalışır (Wayland'de global kısayol yakalamak
-  mümkün değil; MPRIS doğru çözüm)
-- **Çevrimdışı indirme** — LRU bütçeli disk önbelleği
-- **Çalma listeleri** — sürükle-bırak sıralama, M3U/JSON içe-dışa aktarma
-- **Sanatçı aralıklı karıştırma** — aynı sanatçı üst üste gelmez
-- **Sıfır telemetri**, yerel SQLite, tamamen çevrimdışı çalışabilir
+**A Rust audio engine.** symphonia decodes into cpal, which buys true gapless
+transitions, an equal power crossfade, sample accurate seeking, a 10 band
+equaliser, ReplayGain normalisation and ICY metadata so a radio station can
+report what it is playing. Master volume sits in the device callback rather than
+the DSP chain, so muting is audible within one buffer instead of after the ring
+buffer drains.
 
-## Mimari
+**MPRIS rather than global hotkeys.** The GNOME media widget, the lock screen,
+`playerctl` and the keyboard media keys all speak MPRIS. Under Wayland an
+application cannot grab global keys at all, so this is both the cheaper and the
+only correct approach.
+
+**Packs and the Bazaar.** A pack is a named, shareable set of tracks. Publishing
+writes a static `index.json` plus the pack files, which you upload anywhere,
+including straight to GitHub Pages from inside the app. Subscribers add your
+index address. There is no Ritmo server: the catalogue is federated by
+construction, with nothing to run and no single point that can take it away.
+
+Packs carry track identity rather than audio. That keeps a pack in kilobytes, it
+means publishing references instead of redistributing recordings, and it lets
+the same pack resolve against whatever sources each subscriber has enabled.
+
+## Architecture
 
 ```
-packages/core     Platformdan bağımsız TypeScript: domain modeli, sağlayıcılar,
-                  kuyruk/çalma mantığı, kütüphane katmanı, i18n
-packages/ui       React arayüz: tasarım sistemi, bileşenler, store'lar, ekranlar
-apps/web          Vite SPA — hem Tauri hem Capacitor bunu paketler
-apps/desktop      Tauri 2 kabuğu + Rust backend (ses, DB, tarayıcı, ağ, MPRIS)
+packages/core     Platform independent TypeScript: the domain model, providers,
+                  queue and playback logic, the library layer, packs, i18n
+packages/ui       React interface: design system, components, stores, views
+apps/web          Vite SPA, bundled by both the desktop and the mobile shell
+apps/desktop      Tauri 2 shell plus the Rust backend
+apps/mobile       Capacitor shell
 ```
 
-Üç **sınır sözleşmesi** her şeyi bir arada tutar — `docs/` altında:
+Five boundary contracts hold it together, all under `docs/`:
 
-| Dosya | Ne tanımlar |
+| File | What it fixes |
 |---|---|
-| `packages/core/src/types.ts` | Domain modeli. Her katman aynı `Track`/`Album`/`Settings`'i konuşur |
-| `packages/core/src/host/types.ts` | `HostBridge` — çekirdek ile platform arasındaki tek dikiş |
-| `packages/core/src/engine/types.ts` | `AudioEngine` — Rust motoru ve HTML motoru aynı arayüzü uygular |
-| `docs/schema.sql` | SQLite şeması; Rust yazar, TypeScript sorgular |
-| `docs/ipc.md` | Her Tauri komutunun adı ve tel üstündeki şekli |
+| `packages/core/src/types.ts` | The domain model. Every layer speaks the same `Track`, `Album` and `Settings` |
+| `packages/core/src/host/types.ts` | `HostBridge`, the single seam between core logic and a platform |
+| `packages/core/src/engine/types.ts` | `AudioEngine`, implemented by both the Rust engine and the HTML one |
+| `docs/schema.sql` | The SQLite schema. Rust writes it, TypeScript queries it |
+| `docs/ipc.md` | Every Tauri command and its shape on the wire |
 
-Çekirdek kod **asla** platforma göre dallanmaz: köprüye sorar, yetenek bayrağına
-bakar. Mobil sürümde `HostBridge`'in Capacitor uygulaması ve HTML ses motoru
-devreye girer; arayüzün tek satırı değişmez.
+Core code never branches on platform. It asks the bridge and reads a capability
+flag. On mobile the Capacitor implementation of `HostBridge` and the HTML audio
+engine take over, and not one line of the interface changes.
 
-## Geliştirme
+## Development
 
 ```bash
 pnpm install
-pnpm dev:desktop      # Tauri + Vite, hot reload
-pnpm build:desktop    # .deb / .rpm / .AppImage üretir
-pnpm typecheck        # tüm paketler
-cd apps/desktop/src-tauri && cargo test    # Rust birim testleri
+pnpm dev:desktop      # Tauri plus Vite, hot reload
+pnpm build:desktop    # produces the release binary
+pnpm typecheck        # all packages
+pnpm test             # 549 TypeScript tests
+cd apps/desktop/src-tauri && cargo test    # 108 Rust tests
 ```
 
-Gerekli sistem paketleri (Arch): `webkit2gtk-4.1 gtk3 librsvg patchelf gst-libav
+System packages on Arch: `webkit2gtk-4.1 gtk3 librsvg patchelf gst-libav
 alsa-lib base-devel`.
 
-## Lisans
+## Licence
 
-Kodu MIT. Katalog içeriği ilgili sağlayıcının lisansına tabidir — Jamendo
-parçaları Creative Commons'tır ve künye bilgisi `Track.meta.license` alanında
-taşınır.
+The code is MIT. Catalogue content stays under its own licence: Jamendo tracks
+are Creative Commons, and the attribution travels in `Track.meta.license`.

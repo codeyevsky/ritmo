@@ -65,8 +65,9 @@ export function useAddMusic(opts?: AddMusicOptions): AddMusicApi {
         title: parts.length > 0 ? parts.join(' · ') : t('library.importNone'),
         body: failed > 0 ? t('library.importErrors', { count: failed }) : undefined,
         tone: failed > 0 ? 'warn' : 'success',
-        // Errors are never dropped: the toast stays until it is acted on.
-        durationMs: failed > 0 ? 0 : 5000,
+        // Errors are never dropped: the toast stays until it is acted on. A
+        // clean import is a plain confirmation and takes the default lifetime.
+        durationMs: failed > 0 ? 0 : undefined,
         action:
           failed > 0
             ? { label: t('library.importErrorsAction'), onClick: () => setErrors(result.errors) }

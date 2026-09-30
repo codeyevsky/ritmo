@@ -23,6 +23,7 @@ import { Heart, MoreHorizontal, Search as SearchIcon } from '../icons';
 import { useAddToPackItems } from '../shell/AddToPackMenu';
 import { useAddToPlaylistItems } from '../shell/AddToPlaylistMenu';
 import { useRemoveFromLibrary } from '../shell/RemoveFromLibrary';
+import { useTrackDetails } from '../shell/TrackDetails';
 import { useTrackDetailsEditor } from '../shell/TrackDetailsDialog';
 
 const PAGE_SIZE = 200;
@@ -97,6 +98,7 @@ export function LikedSongsView(): ReactElement {
     [firstPage, extra],
   );
   const { itemsFor: editItems, applyEdits, dialog: editDialog } = useTrackDetailsEditor();
+  const { itemsFor: detailsItems, dialog: detailsDialog } = useTrackDetails();
   const {
     itemsFor: removeItems,
     filterRemoved,
@@ -209,7 +211,6 @@ export function LikedSongsView(): ReactElement {
         title: failed === 0 ? t('common.downloaded') : t('errors.downloadPartial', { count: failed }),
         tone: failed === 0 ? 'success' : 'warn',
         progress: 1,
-        durationMs: 5000,
       });
     })();
   }, [tracks, toast, t, registry, library]);
@@ -248,10 +249,11 @@ export function LikedSongsView(): ReactElement {
         separatorBefore: true,
         onSelect: () => unlike(track),
       },
+      ...detailsItems(track),
       ...editItems(track),
       ...removeItems(track),
     ],
-    [t, queue, addToPlaylist, addToPack, unlike, editItems, removeItems],
+    [t, queue, addToPlaylist, addToPack, unlike, detailsItems, editItems, removeItems],
   );
 
   const meta = [

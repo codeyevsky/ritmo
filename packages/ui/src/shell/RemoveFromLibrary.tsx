@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react';
 import type { ReactElement } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { uriProvider } from '@ritmo/core';
 import type { Track, Uri } from '@ritmo/core';
 
@@ -13,11 +12,12 @@ import { IconTrash } from '../icons';
 import { useServices } from '../services';
 import { useLibraryStore } from '../store/library';
 import { useSettingsStore } from '../store/settings';
+import { isScannedPath } from './TrackDetails';
 
 /** How many titles the confirmation lists before it starts counting instead. */
 const NAMED_IN_CONFIRM = 8;
-/** A toast carrying the rescan warning has something to read, so it lingers. */
-const WARNING_TOAST_MS = 9000;
+/** The rescan line is a sentence to read, so it outlasts a bare confirmation. */
+const RESCAN_TOAST_MS = 4000;
 
 export interface LibraryRemover {
   /** The row menu entry for one track. */
@@ -31,21 +31,6 @@ export interface LibraryRemover {
 }
 
 /**
- * A local file whose folder is still a scanned root comes straight back on the
- * next scan. Trailing separators are trimmed so `/music` and `/music/` behave
- * the same, and both separators are accepted because the setting holds whatever
- * the platform's folder picker handed over.
- */
-function underScannedFolder(track: Track, folders: string[]): boolean {
-  const path = track.path;
-  if (path === undefined || path.length === 0) return false;
-  return folders.some((folder) => {
-    const root = folder.replace(/[\\/]+$/, '');
-    return root.length > 0 && (path.startsWith(`${root}/`) || path.startsWith(`${root}\\`));
-  });
-}
-
-/**
  * "Remove from library" as a row menu entry plus the confirmation behind it.
  *
  * Nothing here touches the filesystem: the track's rows leave Ritmo and the
@@ -56,7 +41,6 @@ export function useRemoveFromLibrary(): LibraryRemover {
   const { library } = useServices();
   const { t } = useTranslation();
   const { show } = useToast();
-  const navigate = useNavigate();
   const folders = useSettingsStore((s) => s.settings.musicFolders);
 
   const [pending, setPending] = useState<Track[] | undefined>(undefined);
@@ -84,7 +68,9 @@ export function useRemoveFromLibrary(): LibraryRemover {
           // Counts, playlists, likes and downloads can all have shrunk.
           await useLibraryStore.getState().invalidate();
 
-          const rescanned = list.some((track) => underScannedFolder(track, folders));
+          // The toast states what happened and stops there. Where the file sits
+          // is a question about that track, and Details on the row answers it.
+          const rescanned = list.some((track) => isScannedPath(track.path, folders));
           show({
             title:
               list.length === 1
@@ -96,13 +82,7 @@ export function useRemoveFromLibrary(): LibraryRemover {
                 : t('track.removedStillScannedMany')
               : undefined,
             tone: 'success',
-            durationMs: rescanned ? WARNING_TOAST_MS : undefined,
-            action: rescanned
-              ? {
-                  label: t('track.openLibrarySettings'),
-                  onClick: () => navigate('/settings/library'),
-                }
-              : undefined,
+            durationMs: rescanned ? RESCAN_TOAST_MS : undefined,
           });
           setPending(undefined);
         } catch (e: unknown) {
@@ -119,7 +99,7 @@ export function useRemoveFromLibrary(): LibraryRemover {
         }
       })();
     },
-    [busy, folders, navigate, repo, show, t],
+    [busy, folders, repo, show, t],
   );
 
   const request = useCallback(

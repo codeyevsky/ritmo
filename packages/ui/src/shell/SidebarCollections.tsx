@@ -188,7 +188,6 @@ export function SidebarCollections({
               failed === 0 ? t('common.downloaded') : t('errors.downloadPartial', { count: failed }),
             tone: failed === 0 ? 'success' : 'warn',
             progress: 1,
-            durationMs: 5000,
           });
         })();
       },

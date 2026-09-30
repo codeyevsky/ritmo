@@ -81,6 +81,10 @@ function remoteCover(artwork: Artwork | undefined): string | undefined {
   return undefined;
 }
 
+/** The publish toast hands over a path and a URL shape, so it outlasts a
+ *  plain confirmation without turning into something that has to be dismissed. */
+const PUBLISHED_TOAST_MS = 6000;
+
 /** `https://<host>/<folder>/index.json` — the shape the publisher shares. */
 function shareShape(dir: string): string {
   const parts = dir.split(/[\\/]+/).filter((part) => part.length > 0);
@@ -538,7 +542,7 @@ function PublishModal({ open, pack, onClose }: PublishModalProps): ReactElement 
           title: t('pack.published'),
           body: `${written.dir} · ${t('pack.publishHint', { url: shareShape(written.dir) })}`,
           tone: 'success',
-          durationMs: 12_000,
+          durationMs: PUBLISHED_TOAST_MS,
         });
       } catch (e: unknown) {
         setError(e);
@@ -574,7 +578,7 @@ function PublishModal({ open, pack, onClose }: PublishModalProps): ReactElement 
     if (result === undefined) return;
     void navigator.clipboard
       .writeText(result.indexUrl)
-      .then(() => toast.toast({ title: t('common.copied'), tone: 'success', durationMs: 2000 }))
+      .then(() => toast.toast({ title: t('common.copied'), tone: 'success' }))
       .catch(() => toast.toast({ title: t('errors.copyFailed'), tone: 'danger' }));
   }, [result, toast, t]);
 
@@ -773,7 +777,6 @@ export function PackView(): ReactElement {
           title: found > 0 ? t('pack.reresolved', { count: found }) : t('pack.reresolvedNone'),
           tone: found > 0 ? 'success' : 'neutral',
           progress: 1,
-          durationMs: 5000,
         });
         pack.reload();
       })

@@ -37,6 +37,7 @@ import { useAddMusic } from '../shell/AddMusic';
 import { useAddToPackItems } from '../shell/AddToPackMenu';
 import { useAddToPlaylistItems } from '../shell/AddToPlaylistMenu';
 import { useRemoveFromLibrary } from '../shell/RemoveFromLibrary';
+import { useTrackDetails } from '../shell/TrackDetails';
 import { useTrackDetailsEditor } from '../shell/TrackDetailsDialog';
 import { LibraryCollections } from './LibraryCollections';
 
@@ -537,6 +538,7 @@ function useTrackTableBits(input: Track[], contextName: string) {
   // Destructured so the memo below keeps a stable dependency: the editor object
   // itself is rebuilt every render, its callbacks are not.
   const { itemsFor: editItems, applyEdits, dialog: editDialog } = useTrackDetailsEditor();
+  const { itemsFor: detailsItems, dialog: detailsDialog } = useTrackDetails();
   const {
     itemsFor: removeItems,
     filterRemoved,
@@ -613,7 +615,6 @@ function useTrackTableBits(input: Track[], contextName: string) {
                   id,
                   title: t('common.downloaded'),
                   progress: 1,
-                  durationMs: 3000,
                   tone: 'success',
                 });
               } catch (e: unknown) {
@@ -629,7 +630,7 @@ function useTrackTableBits(input: Track[], contextName: string) {
           },
         });
       }
-      items.push(...editItems(track), ...removeItems(track));
+      items.push(...detailsItems(track), ...editItems(track), ...removeItems(track));
       return items;
     },
     [
@@ -644,6 +645,7 @@ function useTrackTableBits(input: Track[], contextName: string) {
       toast,
       registry,
       library,
+      detailsItems,
       editItems,
       removeItems,
     ],
@@ -651,6 +653,7 @@ function useTrackTableBits(input: Track[], contextName: string) {
 
   return {
     tracks,
+    detailsDialog,
     editDialog,
     removeDialog,
     likedUris,
@@ -757,6 +760,7 @@ function SongsTab({
           />
         }
       />
+      {bits.detailsDialog}
       {bits.editDialog}
       {bits.removeDialog}
     </div>

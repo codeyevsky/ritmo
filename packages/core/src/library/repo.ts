@@ -163,6 +163,23 @@ export interface TrackDetailsPatch {
   discNumber?: number | undefined;
 }
 
+/**
+ * The file stamps a domain {@link Track} does not carry, straight off the row.
+ *
+ * `path`, `file_size` and `file_mtime` are the scanner's record of the file on
+ * disk and `added_at` is when the row joined the library, which is what the
+ * Details surfaces report instead of what the tags claim.
+ */
+export interface TrackFile {
+  uri: Uri;
+  /** Absolute path on disk; absent for anything that is not a local file. */
+  path?: string;
+  sizeBytes?: number;
+  /** Last modification time of the file itself, as reported by the scanner. */
+  modifiedAt?: number;
+  addedAt?: number;
+}
+
 export interface ListOpts {
   provider?: ProviderId;
   sort?: 'title' | 'artist' | 'album' | 'added' | 'duration' | 'plays';
@@ -349,6 +366,39 @@ export class Repo {
     for (const uri of uris) {
       const track = found.get(uri);
       if (track !== undefined) out.push(track);
+    }
+    return out;
+  }
+
+  /**
+   * File stamps for the given tracks, in no particular order and with the rows
+   * that do not exist simply missing.
+   *
+   * A separate read rather than extra fields on `Track`: every surface that
+   * shows a track would carry four columns it never renders, and only the
+   * Details views ask for them.
+   */
+  async getTrackFiles(uris: Uri[]): Promise<TrackFile[]> {
+    const wanted = dedupe(uris);
+    if (wanted.length === 0) return [];
+    const out: TrackFile[] = [];
+    for (const group of chunk(wanted, IN_CHUNK)) {
+      const rows = await this.db.query(
+        `SELECT uri, path, file_size, file_mtime, added_at FROM tracks
+          WHERE uri IN (${placeholders(group.length)})`,
+        group,
+      );
+      for (const row of rows) {
+        const uri = nonEmpty(asString(row.uri));
+        if (uri === undefined) continue;
+        out.push({
+          uri,
+          path: nonEmpty(asString(row.path)),
+          sizeBytes: positiveInt(row.file_size),
+          modifiedAt: positiveInt(row.file_mtime),
+          addedAt: positiveInt(row.added_at),
+        });
+      }
     }
     return out;
   }

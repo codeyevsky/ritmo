@@ -69,7 +69,6 @@ export function useScanProgress(): void {
     toast({
       title: tr('library.scanFound', { count: lastScan.added }),
       tone: lastScan.errors.length > 0 ? 'warn' : 'success',
-      durationMs: 6000,
     });
   }, [lastScan, dismiss, toast, tr]);
 

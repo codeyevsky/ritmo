@@ -25,6 +25,7 @@ import { entityPath } from '../routes';
 import { useAddToPackItems } from '../shell/AddToPackMenu';
 import { useAddToPlaylistItems } from '../shell/AddToPlaylistMenu';
 import { useRemoveFromLibrary } from '../shell/RemoveFromLibrary';
+import { useTrackDetails } from '../shell/TrackDetails';
 import { useTrackDetailsEditor } from '../shell/TrackDetailsDialog';
 import { EntityHeroSkeleton, TrackListSkeleton } from './AlbumView';
 
@@ -330,6 +331,7 @@ export function PlaylistView(): ReactElement {
   const data = playlist.data;
   const fetched = useMemo(() => data?.tracks ?? [], [data]);
   const { itemsFor: editItems, applyEdits, dialog: editDialog } = useTrackDetailsEditor();
+  const { itemsFor: detailsItems, dialog: detailsDialog } = useTrackDetails();
   const {
     itemsFor: removeItems,
     request: requestRemoval,
@@ -444,7 +446,6 @@ export function PlaylistView(): ReactElement {
           title: failed === 0 ? t('common.downloaded') : t('errors.downloadPartial', { count: failed }),
           tone: failed === 0 ? 'success' : 'warn',
           progress: 1,
-          durationMs: 5000,
         });
         void refresh();
       })();
@@ -469,7 +470,7 @@ export function PlaylistView(): ReactElement {
           toast.toast({ id, title, progress: total > 0 ? done / total : 0, durationMs: 0 }),
       )
       .then(() => {
-        toast.toast({ id, title: t('common.downloaded'), tone: 'success', progress: 1, durationMs: 5000 });
+        toast.toast({ id, title: t('common.downloaded'), tone: 'success', progress: 1 });
         void refresh();
       })
       .catch((e: unknown) =>
@@ -498,10 +499,10 @@ export function PlaylistView(): ReactElement {
             const separator = folder.includes('\\') ? '\\' : '/';
             const safe = data.name.replace(/[\\/:*?"<>|]+/g, '_');
             await host.files.writeText(`${folder}${separator}${safe}.${kind}`, contents);
-            toast.toast({ title: t('playlist.exported'), tone: 'success', durationMs: 4000 });
+            toast.toast({ title: t('playlist.exported'), tone: 'success' });
           } else {
             await navigator.clipboard.writeText(contents);
-            toast.toast({ title: t('common.copied'), tone: 'success', durationMs: 3000 });
+            toast.toast({ title: t('common.copied'), tone: 'success' });
           }
         } catch (e: unknown) {
           toast.toast({ title: t('errors.exportFailed'), body: errorBody(e), tone: 'danger' });
@@ -558,7 +559,7 @@ export function PlaylistView(): ReactElement {
     if (!data) return;
     void navigator.clipboard
       .writeText(data.uri)
-      .then(() => toast.toast({ title: t('common.copied'), durationMs: 2000, tone: 'success' }))
+      .then(() => toast.toast({ title: t('common.copied'), tone: 'success' }))
       .catch(() => toast.toast({ title: t('errors.copyFailed'), tone: 'danger' }));
   }, [data, toast, t]);
 
@@ -639,7 +640,7 @@ export function PlaylistView(): ReactElement {
           },
         });
       }
-      items.push(...editItems(track), ...removeItems(track));
+      items.push(...detailsItems(track), ...editItems(track), ...removeItems(track));
       return items;
     },
     [
@@ -653,6 +654,7 @@ export function PlaylistView(): ReactElement {
       refresh,
       playlist,
       toast,
+      detailsItems,
       editItems,
       removeItems,
     ],

@@ -25,6 +25,10 @@ function errorBody(error: unknown): string | undefined {
   return error instanceof Error ? error.message : undefined;
 }
 
+/** An install toast reports how many tracks actually resolved, so it stays up
+ *  long enough for that line to be read. */
+const INSTALLED_TOAST_MS = 6000;
+
 /** A card subtitle: author and track count, never the raw url. */
 function subtitleFor(entry: BazaarEntry, tracksLabel: string): string {
   const author = entry.author !== undefined && entry.author !== '' ? entry.author : undefined;
@@ -307,7 +311,7 @@ export function BazaarView(): ReactElement {
         title: t('bazaar.installed', { name: pack.name }),
         body: t('pack.resolvedCount', { resolved, total: pack.trackCount }),
         tone: resolved === pack.trackCount ? 'success' : 'warn',
-        durationMs: 8000,
+        durationMs: INSTALLED_TOAST_MS,
       });
       navigate(packPath(pack.uri));
     },
@@ -340,7 +344,7 @@ export function BazaarView(): ReactElement {
             total: installed.trackCount,
           }),
           tone: 'success',
-          durationMs: 8000,
+          durationMs: INSTALLED_TOAST_MS,
         });
         navigate(packPath(installed.uri));
       } catch (e: unknown) {

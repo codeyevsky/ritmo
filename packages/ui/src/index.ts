@@ -34,6 +34,8 @@ export { useAddMusic } from './shell/AddMusic';
 export type { AddMusicApi, AddMusicOptions } from './shell/AddMusic';
 export { useTrackDetailsEditor } from './shell/TrackDetailsDialog';
 export type { TrackDetailsEditor } from './shell/TrackDetailsDialog';
+export { AlbumDetails, useTrackDetails } from './shell/TrackDetails';
+export type { AlbumDetailsProps, TrackDetailsViewer } from './shell/TrackDetails';
 export { MobileTabBar } from './shell/MobileTabBar';
 export type { MobileTabBarProps } from './shell/MobileTabBar';
 

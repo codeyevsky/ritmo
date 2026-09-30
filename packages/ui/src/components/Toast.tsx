@@ -23,7 +23,11 @@ export interface ToastProps {
   className?: string;
 }
 
-export const TOAST_DEFAULT_DURATION_MS = 4000;
+/**
+ * A confirmation only has to be noticed, not read twice, and the countdown line
+ * on the bottom edge already says it is leaving.
+ */
+export const TOAST_DEFAULT_DURATION_MS = 2200;
 
 const TONE_BAR: Record<NonNullable<ToastSpec['tone']>, string> = {
   neutral: 'bg-text-faint',

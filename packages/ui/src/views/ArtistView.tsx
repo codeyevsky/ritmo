@@ -25,6 +25,7 @@ import { entityPath } from '../routes';
 import { useAddToPackItems } from '../shell/AddToPackMenu';
 import { useAddToPlaylistItems } from '../shell/AddToPlaylistMenu';
 import { useRemoveFromLibrary } from '../shell/RemoveFromLibrary';
+import { useTrackDetails } from '../shell/TrackDetails';
 import { useTrackDetailsEditor } from '../shell/TrackDetailsDialog';
 import { EntityHeroSkeleton } from './AlbumView';
 
@@ -109,6 +110,7 @@ export function ArtistView(): ReactElement {
 
   const top = useAsync(fetchTop, [fetchTop], { keepPrevious: true });
   const { itemsFor: editItems, applyEdits, dialog: editDialog } = useTrackDetailsEditor();
+  const { itemsFor: detailsItems, dialog: detailsDialog } = useTrackDetails();
   const {
     itemsFor: removeItems,
     filterRemoved,
@@ -202,7 +204,7 @@ export function ArtistView(): ReactElement {
     if (!data) return;
     void navigator.clipboard
       .writeText(data.uri)
-      .then(() => toast.toast({ title: t('common.copied'), durationMs: 2000, tone: 'success' }))
+      .then(() => toast.toast({ title: t('common.copied'), tone: 'success' }))
       .catch(() => toast.toast({ title: t('errors.copyFailed'), tone: 'danger' }));
   }, [data, toast, t]);
 
@@ -313,6 +315,7 @@ export function ArtistView(): ReactElement {
                 { id: 'next', label: t('queue.playNext'), onSelect: () => queue.addNext([track]) },
                 { id: 'add', label: t('playlist.addTo'), items: addToPlaylist, separatorBefore: true },
                 { id: 'add-pack', label: t('pack.addTo'), items: addToPack },
+                ...detailsItems(track),
                 ...editItems(track),
                 ...(stored ? removeItems(track) : []),
               ]}
@@ -330,6 +333,7 @@ export function ArtistView(): ReactElement {
             ) : null}
           </>
         )}
+        {detailsDialog}
         {editDialog}
         {removeDialog}
       </section>

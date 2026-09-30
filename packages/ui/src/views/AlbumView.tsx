@@ -38,6 +38,7 @@ import { useAddToPackItems } from '../shell/AddToPackMenu';
 import { useAddToPlaylistItems } from '../shell/AddToPlaylistMenu';
 import { useDeleteAlbum } from '../shell/DeleteAlbum';
 import { useRemoveFromLibrary } from '../shell/RemoveFromLibrary';
+import { AlbumDetails, useTrackDetails } from '../shell/TrackDetails';
 import { useTrackDetailsEditor } from '../shell/TrackDetailsDialog';
 
 const COLUMNS: TrackTableColumn[] = [
@@ -315,6 +316,7 @@ export function AlbumView(): ReactElement {
   const album = useAsync(fetchAlbum, [fetchAlbum], { keepPrevious: true });
   const data = album.data;
   const { itemsFor: editItems, applyEdits, dialog: editDialog } = useTrackDetailsEditor();
+  const { itemsFor: detailsItems, dialog: detailsDialog } = useTrackDetails();
   const {
     itemsFor: removeItems,
     filterRemoved,
@@ -437,7 +439,6 @@ export function AlbumView(): ReactElement {
         id,
         title: failed === 0 ? t('common.downloaded') : t('errors.downloadPartial', { count: failed }),
         tone: failed === 0 ? 'success' : 'warn',
-        durationMs: 5000,
         progress: 1,
       });
       void refresh();
@@ -532,20 +533,31 @@ export function AlbumView(): ReactElement {
           onSelect: () => toggleRemoval(track),
         });
       }
-      items.push(...editItems(track));
+      items.push(...detailsItems(track), ...editItems(track));
       // A remote album's rows come from the provider and may not be stored at
       // all, so forgetting one only makes sense on a local album.
       if (editable) items.push(...removeItems(track));
       return items;
     },
-    [addToPack, addToPlaylist, editItems, editable, pendingRows, queue, removeItems, t, toggleRemoval],
+    [
+      addToPack,
+      addToPlaylist,
+      detailsItems,
+      editItems,
+      editable,
+      pendingRows,
+      queue,
+      removeItems,
+      t,
+      toggleRemoval,
+    ],
   );
 
   const copyLink = useCallback(() => {
     if (!data) return;
     void navigator.clipboard
       .writeText(data.uri)
-      .then(() => toast.toast({ title: t('common.copied'), durationMs: 2000, tone: 'success' }))
+      .then(() => toast.toast({ title: t('common.copied'), tone: 'success' }))
       .catch(() => toast.toast({ title: t('errors.copyFailed'), tone: 'danger' }));
   }, [data, toast, t]);
 
@@ -766,6 +778,7 @@ export function AlbumView(): ReactElement {
           ))
         )}
 
+        {detailsDialog}
         {editDialog}
         {removeDialog}
         {deleteDialog}
@@ -795,6 +808,8 @@ export function AlbumView(): ReactElement {
             </>
           }
         />
+
+        {editable ? <AlbumDetails tracks={stored} /> : null}
 
         <p className="mono text-[11px] leading-relaxed text-text-faint">
           {t('album.providerLine', { provider: providerName })}

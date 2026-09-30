@@ -394,8 +394,9 @@
   animation-name: ritmo-toast-countdown;
   animation-timing-function: linear;
   animation-fill-mode: forwards;
-  /* Duration is set inline from the toast's own lifetime. */
-  animation-duration: 4000ms;
+  /* Duration is set inline from the toast's own lifetime; this only matches
+     TOAST_DEFAULT_DURATION_MS so the line never flashes at the wrong speed. */
+  animation-duration: 2200ms;
 }
 
 @media (prefers-reduced-motion: reduce) {

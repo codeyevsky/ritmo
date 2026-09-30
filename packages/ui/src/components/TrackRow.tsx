@@ -15,6 +15,9 @@ import { ProviderBadge } from './ProviderBadge';
 
 export type TrackRowVariant = 'list' | 'compact' | 'queue' | 'search';
 
+/** An album edit the user has staged but not written yet. */
+export type TrackRowPending = 'add' | 'remove';
+
 export interface TrackRowProps {
   track: Track;
   /** 1-based; omit to hide the index column. */
@@ -36,6 +39,13 @@ export interface TrackRowProps {
   removeLabel?: string;
   onContextMenu?: (e: React.MouseEvent) => void;
   onClick?: (e: React.MouseEvent) => void;
+  /**
+   * Marks the row as an unsaved edit: both readings dim it, and `'remove'` also
+   * strikes the title through, so the row stays listed while reading as gone.
+   */
+  pending?: TrackRowPending;
+  /** Announced on a pending row, since dimming reaches no screen reader. */
+  pendingLabel?: string;
   /** Present only in the queue, where rows are draggable. */
   dragHandleProps?: React.HTMLAttributes<HTMLElement>;
   menuItems?: MenuItemSpec[];
@@ -137,6 +147,8 @@ export const TrackRow = forwardRef<HTMLDivElement, TrackRowProps>(function Track
     onToggleLike,
     onRemove,
     removeLabel,
+    pending,
+    pendingLabel,
     onContextMenu,
     onClick,
     dragHandleProps,
@@ -185,6 +197,7 @@ export const TrackRow = forwardRef<HTMLDivElement, TrackRowProps>(function Track
         compact || variant === 'queue' ? 'min-h-[44px]' : 'min-h-[56px]',
         selected ? 'bg-surface-3' : 'hover:bg-surface-2/70 focus-visible:bg-surface-2/70',
         active && 'gutter-mark',
+        pending !== undefined && 'opacity-50',
         'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
         grid,
         className,
@@ -243,8 +256,17 @@ export const TrackRow = forwardRef<HTMLDivElement, TrackRowProps>(function Track
       ) : null}
 
       <div role="gridcell" className="flex min-w-0 flex-col justify-center">
-        <div className={clsx('min-w-0 text-sm', active ? 'text-accent' : 'text-text')}>
+        <div
+          className={clsx(
+            'min-w-0 text-sm',
+            active ? 'text-accent' : 'text-text',
+            pending === 'remove' && 'line-through',
+          )}
+        >
           {variant === 'queue' ? <Marquee>{track.title}</Marquee> : <span className="block truncate">{track.title}</span>}
+          {pending !== undefined && pendingLabel !== undefined ? (
+            <span className="sr-only"> {pendingLabel}</span>
+          ) : null}
         </div>
         <div className="min-w-0 truncate text-xs text-text-dim">{artists}</div>
       </div>

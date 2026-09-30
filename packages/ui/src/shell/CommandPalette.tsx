@@ -6,7 +6,7 @@ import type { RepeatMode, Track } from '@ritmo/core';
 import { normalizeKey, similarity, unifiedSearch } from '@ritmo/core';
 
 import { ErrorBanner, Input, Skeleton } from '../components';
-import { useSettings, useTranslation } from '../hooks';
+import { guardedNavigation, useSettings, useTranslation } from '../hooks';
 import {
   IconHeart,
   IconHome,
@@ -121,7 +121,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
     const navGroup = t('common.navigate');
     const settingsGroup = t('settings.title');
     const playlistGroup = t('nav.playlists');
-    const go = (path: string) => () => navigate(path);
+    const go = (path: string) => () => guardedNavigation(() => navigate(path));
 
     const items: PaletteAction[] = [
       { id: 'nav-home', group: navGroup, label: t('nav.home'), icon: IconHome, run: go('/') },
@@ -139,7 +139,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
         group: playlistGroup,
         label: playlist.name,
         icon: IconMusic,
-        run: () => navigate(entityPath(playlist.uri)),
+        run: () => guardedNavigation(() => navigate(entityPath(playlist.uri))),
       });
     }
 

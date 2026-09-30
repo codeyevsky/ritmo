@@ -7,6 +7,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { ChevronDown, ChevronUp, Clock } from '../icons';
 import { Skeleton } from './Skeleton';
 import { TrackRow, trackRowGridClass } from './TrackRow';
+import type { TrackRowPending } from './TrackRow';
 import type { MenuItemSpec } from './DropdownMenu';
 
 export interface TrackTableColumn {
@@ -32,6 +33,12 @@ export interface TrackTableProps {
   onRemoveTrack?: (track: Track, index: number) => void;
   /** What that control announces; required whenever `onRemoveTrack` is given. */
   removeLabel?: string;
+  /** Rows carrying an edit the user has staged but not saved yet. */
+  pendingRows?: ReadonlyMap<Uri, TrackRowPending>;
+  /** What each of those readings announces. */
+  pendingLabels?: Readonly<Record<TrackRowPending, string>>;
+  /** Overrides `removeLabel` on a row staged for removal, where it undoes. */
+  restoreLabel?: string;
   /** Enables Shift/Ctrl range selection and returns the selected set. */
   selectable?: boolean;
   onSelectionChange?: (uris: Set<Uri>) => void;
@@ -72,6 +79,9 @@ export function TrackTable({
   menuItemsFor,
   onRemoveTrack,
   removeLabel,
+  pendingRows,
+  pendingLabels,
+  restoreLabel,
   selectable = false,
   onSelectionChange,
   onEndReached,
@@ -326,6 +336,7 @@ export function TrackTable({
             const track = tracks[item.index];
             if (!track) return null;
             const isCurrent = currentUri !== undefined && track.uri === currentUri;
+            const pending = pendingRows?.get(track.uri);
             return (
               <div
                 key={item.key}
@@ -360,8 +371,17 @@ export function TrackTable({
                       }
                     : {})}
                   {...(onRemoveTrack
-                    ? { onRemove: () => onRemoveTrack(track, item.index), removeLabel }
+                    ? {
+                        onRemove: () => onRemoveTrack(track, item.index),
+                        removeLabel:
+                          pending === 'remove' && restoreLabel !== undefined
+                            ? restoreLabel
+                            : removeLabel,
+                      }
                     : {})}
+                  {...(pending === undefined
+                    ? {}
+                    : { pending, ...(pendingLabels ? { pendingLabel: pendingLabels[pending] } : {}) })}
                 />
               </div>
             );

@@ -10,7 +10,7 @@ export interface ToastSpec {
   title: string;
   body?: string;
   tone?: 'neutral' | 'success' | 'warn' | 'danger';
-  /** ms; 0 keeps it until dismissed. */
+  /** ms; 0 keeps it until dismissed, unless `progress` reports the work done. */
   durationMs?: number;
   action?: { label: string; onClick: () => void };
   /** 0..1 — renders a progress bar, used by the library scan and downloads. */
@@ -32,6 +32,17 @@ const TONE_BAR: Record<NonNullable<ToastSpec['tone']>, string> = {
   danger: 'bg-danger',
 };
 
+/**
+ * The countdown line is a lifetime, not a measurement, so it reads fainter than
+ * the determinate progress bar above it and never shares its accent fill.
+ */
+const TONE_COUNTDOWN: Record<NonNullable<ToastSpec['tone']>, string> = {
+  neutral: 'bg-text-faint/50',
+  success: 'bg-accent/50',
+  warn: 'bg-warn/50',
+  danger: 'bg-danger/50',
+};
+
 function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
@@ -39,14 +50,24 @@ function clamp(v: number, lo: number, hi: number): number {
 export function Toast({ toast, onDismiss, className }: ToastProps) {
   const { t } = useTranslation();
   const [paused, setPaused] = useState(false);
-  const duration = toast.durationMs ?? TOAST_DEFAULT_DURATION_MS;
+
+  const tone = toast.tone ?? 'neutral';
+  const progress = toast.progress === undefined ? undefined : clamp(toast.progress, 0, 1);
+  const percent = progress === undefined ? 0 : Math.round(progress * 100);
+
+  // Every long operation pushes its toast sticky and re-pushes it as the work
+  // advances, so a sticky toast reporting full progress is a finished one: it
+  // starts the normal countdown here rather than at a dozen call sites. A
+  // sticky toast with no progress at all is asking for attention and stays.
+  const declared = toast.durationMs ?? TOAST_DEFAULT_DURATION_MS;
+  const duration = declared <= 0 && progress === 1 ? TOAST_DEFAULT_DURATION_MS : declared;
   const remaining = useRef(duration);
 
   // A re-push with the same id updates in place; only a changed lifetime should
   // restart the countdown, so live progress updates never extend it.
   useEffect(() => {
-    remaining.current = toast.durationMs ?? TOAST_DEFAULT_DURATION_MS;
-  }, [toast.id, toast.durationMs]);
+    remaining.current = duration;
+  }, [toast.id, duration]);
 
   useEffect(() => {
     if (duration <= 0 || paused) return;
@@ -57,10 +78,6 @@ export function Toast({ toast, onDismiss, className }: ToastProps) {
       remaining.current = Math.max(0, remaining.current - (Date.now() - startedAt));
     };
   }, [duration, paused, toast.id, onDismiss]);
-
-  const tone = toast.tone ?? 'neutral';
-  const progress = toast.progress === undefined ? undefined : clamp(toast.progress, 0, 1);
-  const percent = progress === undefined ? 0 : Math.round(progress * 100);
 
   return (
     <div
@@ -123,6 +140,23 @@ export function Toast({ toast, onDismiss, className }: ToastProps) {
           onClick={() => onDismiss(toast.id)}
         />
       </div>
+
+      {duration > 0 ? (
+        <span
+          // Keyed on the lifetime so a re-push that grants new time restarts the
+          // line together with the timer; a progress update leaves both alone.
+          key={`${toast.id}:${duration}`}
+          aria-hidden="true"
+          className={clsx(
+            'toast-countdown absolute bottom-0 left-0.5 right-0 h-0.5',
+            TONE_COUNTDOWN[tone],
+          )}
+          style={{
+            animationDuration: `${duration}ms`,
+            animationPlayState: paused ? 'paused' : 'running',
+          }}
+        />
+      ) : null}
     </div>
   );
 }

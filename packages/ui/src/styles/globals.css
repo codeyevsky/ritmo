@@ -377,6 +377,27 @@
   }
 }
 
+/* A toast's remaining lifetime, readable off its bottom edge. The animation is
+   the clock: driving it from React would re-render every open toast on every
+   frame, and a paused animation freezes exactly where the paused timer did. */
+@keyframes ritmo-toast-countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.toast-countdown {
+  transform-origin: left center;
+  animation-name: ritmo-toast-countdown;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+  /* Duration is set inline from the toast's own lifetime. */
+  animation-duration: 4000ms;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -390,5 +411,13 @@
   /* A frozen sheen reads as a rendering glitch; fall back to a flat tint. */
   .shimmer::after {
     display: none;
+  }
+
+  /* The blanket rule above would collapse a forwards animation straight to its
+     end state, leaving the countdown line at zero width the moment it appears.
+     It holds full width instead; the toast still dismisses on its own clock. */
+  .toast-countdown {
+    animation-name: none !important;
+    transform: scaleX(1);
   }
 }

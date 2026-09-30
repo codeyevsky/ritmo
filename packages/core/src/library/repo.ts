@@ -886,12 +886,24 @@ export class Repo {
     );
   }
 
+  /**
+   * Deletes the rows nothing points at any more: an album whose last track just
+   * left it, an artist whose last track just went.
+   *
+   * Called after anything that can orphan a row — removing a track from an
+   * album, forgetting tracks, a rescan prune — because an album is only a
+   * grouping of tracks, and one with none left is a row the Library would
+   * otherwise keep counting for ever.
+   */
   async vacuumOrphans(): Promise<void> {
     // Liked entities survive even with no tracks left: the user asked for them
-    // explicitly, and re-adding the folder must not lose the like.
+    // explicitly, and re-adding the folder must not lose the like. Only local
+    // albums are pruned at all — a remote album row is the provider's record of
+    // its own catalogue, and holding none of its tracks is the normal state.
     await this.db.execute(
       `DELETE FROM albums
-        WHERE NOT EXISTS (SELECT 1 FROM tracks t WHERE t.album_uri = albums.uri)
+        WHERE albums.provider = 'local'
+          AND NOT EXISTS (SELECT 1 FROM tracks t WHERE t.album_uri = albums.uri)
           AND NOT EXISTS (SELECT 1 FROM likes l WHERE l.uri = albums.uri)`,
     );
     // The artist references live inside `artists_json`, so they are collected

@@ -73,6 +73,10 @@ export class Library {
     await this.sql.execute('DELETE FROM http_cache WHERE expires_at <= ?', [Date.now()]);
     await this.sql.query('PRAGMA optimize');
     await this.history.prune(HISTORY_KEEP_DAYS);
+    // Rows nothing points at any more: an album emptied by an earlier build,
+    // an artist whose last track went. They are counted in the Library and
+    // render as nothing, so launch is the right moment to be rid of them.
+    await this.repo.vacuumOrphans();
   }
 
   /**

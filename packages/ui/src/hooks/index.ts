@@ -61,6 +61,9 @@ export type { ToastApi, ToastInput } from './useToast';
 export { useTranslation } from './useTranslation';
 export type { TFunction, Translation } from './useTranslation';
 
+export { useUnsavedGuard, guardedNavigation } from './useUnsavedGuard';
+export type { UnsavedGuard } from './useUnsavedGuard';
+
 export { useWallpaperAccent } from './useWallpaperAccent';
 
 export { FALLBACK_VIEWPORT, observeViewport, viewportSize } from './viewport';

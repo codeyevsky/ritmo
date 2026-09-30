@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { IconButton } from '../components';
-import { useSettings, useToast, useTranslation } from '../hooks';
+import { guardedNavigation, useSettings, useToast, useTranslation } from '../hooks';
 import {
   IconChevronLeft,
   IconChevronRight,
@@ -111,14 +111,14 @@ export function TitleBar({ className }: TitleBarProps): JSX.Element {
           label={t('common.back')}
           size="sm"
           disabled={!nav.canBack}
-          onClick={() => navigate(-1)}
+          onClick={() => guardedNavigation(() => navigate(-1))}
         />
         <IconButton
           icon={IconChevronRight}
           label={t('common.forward')}
           size="sm"
           disabled={!nav.canForward}
-          onClick={() => navigate(1)}
+          onClick={() => guardedNavigation(() => navigate(1))}
         />
       </div>
 

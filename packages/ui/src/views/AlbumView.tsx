@@ -20,14 +20,23 @@ import {
   Skeleton,
   TrackTable,
 } from '../components';
-import type { MenuItemSpec, TrackTableColumn } from '../components';
-import { useAsync, useIsLiked, useLibrary, useQueue, useToast, useTranslation } from '../hooks';
+import type { MenuItemSpec, TrackRowPending, TrackTableColumn } from '../components';
+import {
+  useAsync,
+  useIsLiked,
+  useLibrary,
+  useQueue,
+  useToast,
+  useTranslation,
+  useUnsavedGuard,
+} from '../hooks';
 import { useServices } from '../services';
 import { useLibraryStore, usePlayerStore } from '../store';
-import { Check, Music, Plus } from '../icons';
+import { Check, Music, Plus, Trash } from '../icons';
 import { entityPath } from '../routes';
 import { useAddToPackItems } from '../shell/AddToPackMenu';
 import { useAddToPlaylistItems } from '../shell/AddToPlaylistMenu';
+import { useDeleteAlbum } from '../shell/DeleteAlbum';
 import { useRemoveFromLibrary } from '../shell/RemoveFromLibrary';
 import { useTrackDetailsEditor } from '../shell/TrackDetailsDialog';
 
@@ -39,6 +48,24 @@ const COLUMNS: TrackTableColumn[] = [
 
 /** One screenful of candidates; the search box is how a bigger library is narrowed. */
 const PICKER_PAGE = 200;
+
+/**
+ * Track list edits the user has made but not written.
+ *
+ * They are held here rather than sent straight to the repo so that removing
+ * three tracks and thinking better of it costs nothing: only Save turns any of
+ * this into a write.
+ */
+interface StagedEdits {
+  /** Tracks taken off the album, still listed and struck through. */
+  removed: Set<Uri>;
+  /** Tracks picked in the dialog, listed after the album's own. */
+  added: Track[];
+}
+
+function noEdits(): StagedEdits {
+  return { removed: new Set(), added: [] };
+}
 
 function errorBody(error: unknown): string | undefined {
   return error instanceof Error ? error.message : undefined;
@@ -104,24 +131,27 @@ function groupByDisc(tracks: Track[]): DiscGroup[] | undefined {
  * The picker behind "Add tracks".
  *
  * It only ever lists the user's own local tracks: an album stored here is made
- * of rows Ritmo holds, and a provider's catalogue is not ours to reshape.
+ * of rows Ritmo holds, and a provider's catalogue is not ours to reshape. It
+ * writes nothing itself — what it hands back is staged with the rest.
  */
 function AddTracksDialog({
   album,
+  excluded,
   onClose,
-  onAdded,
+  onPick,
 }: {
   album: { uri: Uri; name: string };
+  excluded: ReadonlySet<Uri>;
   onClose: () => void;
-  onAdded: (count: number) => void;
+  onPick: (tracks: Track[]) => void;
 }): ReactElement {
   const { library } = useServices();
   const { t } = useTranslation();
   const [input, setInput] = useState('');
   const [search, setSearch] = useState('');
-  const [chosen, setChosen] = useState<Set<Uri>>(() => new Set());
-  const [saving, setSaving] = useState(false);
-  const [failed, setFailed] = useState<string | undefined>(undefined);
+  // The whole track is kept, not just its uri: a pick has to survive the search
+  // being narrowed, and the staged row needs something to render.
+  const [chosen, setChosen] = useState<Map<Uri, Track>>(() => new Map());
 
   useEffect(() => {
     const id = window.setTimeout(() => setSearch(input.trim()), 200);
@@ -143,57 +173,40 @@ function AddTracksDialog({
   );
   const page = useAsync(load, [load], { keepPrevious: true });
 
-  // A track already on this album has nothing to gain from being added again.
+  // A track already on this album, or already staged for it, has nothing to
+  // gain from being added again.
   const candidates = useMemo(
-    () => (page.data?.items ?? []).filter((track) => track.album?.uri !== albumUri),
-    [page.data, albumUri],
+    () =>
+      (page.data?.items ?? []).filter(
+        (track) => track.album?.uri !== albumUri && !excluded.has(track.uri),
+      ),
+    [page.data, albumUri, excluded],
   );
 
-  const toggle = useCallback((trackUri: Uri) => {
+  const toggle = useCallback((track: Track) => {
     setChosen((prev) => {
-      const next = new Set(prev);
-      if (next.has(trackUri)) next.delete(trackUri);
-      else next.add(trackUri);
+      const next = new Map(prev);
+      if (next.has(track.uri)) next.delete(track.uri);
+      else next.set(track.uri, track);
       return next;
     });
   }, []);
-
-  const save = useCallback(() => {
-    if (chosen.size === 0 || saving) return;
-    setSaving(true);
-    setFailed(undefined);
-    const picked = [...chosen];
-    void (async () => {
-      try {
-        for (const trackUri of picked) {
-          await repo.setTrackAlbum(trackUri, { uri: albumUri, name: album.name });
-        }
-        onAdded(picked.length);
-      } catch (e: unknown) {
-        setFailed(e instanceof Error ? e.message : String(e));
-      } finally {
-        setSaving(false);
-      }
-    })();
-  }, [album.name, albumUri, chosen, onAdded, repo, saving]);
 
   return (
     <Modal
       open
       onClose={onClose}
-      dismissible={!saving}
       size="lg"
       title={t('album.addTracksTitle', { name: album.name })}
       description={t('album.addTracksHint')}
       actions={
         <>
-          <Button variant="ghost" onClick={onClose} disabled={saving}>
+          <Button variant="ghost" onClick={onClose}>
             {t('common.cancel')}
           </Button>
           <Button
             variant="primary"
-            onClick={save}
-            loading={saving}
+            onClick={() => onPick([...chosen.values()])}
             disabled={chosen.size === 0}
           >
             {t('album.addTracksAction')}
@@ -202,15 +215,6 @@ function AddTracksDialog({
       }
     >
       <div className="flex min-w-0 flex-col gap-3">
-        {failed !== undefined ? (
-          <ErrorBanner
-            title={t('album.addTracksFailed')}
-            body={failed}
-            tone="danger"
-            onDismiss={() => setFailed(undefined)}
-          />
-        ) : null}
-
         <Input
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -220,7 +224,6 @@ function AddTracksDialog({
           clearable
           onClear={() => setInput('')}
           autoFocus
-          disabled={saving}
         />
 
         <div
@@ -242,8 +245,7 @@ function AddTracksDialog({
                   key={track.uri}
                   type="button"
                   aria-pressed={picked}
-                  disabled={saving}
-                  onClick={() => toggle(track.uri)}
+                  onClick={() => toggle(track)}
                   className={clsx(
                     'flex w-full min-w-0 items-center gap-3 rounded-sm px-2 py-2 text-left transition-colors ease-swift',
                     'hover:bg-surface-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
@@ -318,12 +320,6 @@ export function AlbumView(): ReactElement {
     filterRemoved,
     dialog: removeDialog,
   } = useRemoveFromLibrary();
-  const tracks = useMemo(
-    () => filterRemoved(applyEdits(data?.tracks ?? [])),
-    [applyEdits, filterRemoved, data],
-  );
-  const addToPlaylist = useAddToPlaylistItems(tracks);
-  const addToPack = useAddToPackItems(tracks);
 
   /**
    * Only a local album's track list is ours to change. A remote one is the
@@ -332,6 +328,48 @@ export function AlbumView(): ReactElement {
    */
   const editable = uri !== '' && uriProvider(uri) === 'local';
   const [picking, setPicking] = useState(false);
+  const [staged, setStaged] = useState<StagedEdits>(noEdits);
+  const [saving, setSaving] = useState(false);
+
+  // Another album is another track list; nothing staged here applies to it.
+  useEffect(() => {
+    setStaged(noEdits());
+  }, [uri]);
+
+  const stored = useMemo(
+    () => filterRemoved(applyEdits(data?.tracks ?? [])),
+    [applyEdits, filterRemoved, data],
+  );
+
+  const tracks = useMemo(() => {
+    if (staged.added.length === 0) return stored;
+    const present = new Set(stored.map((track) => track.uri));
+    return [...stored, ...staged.added.filter((track) => !present.has(track.uri))];
+  }, [stored, staged.added]);
+
+  const pendingRows = useMemo(() => {
+    const rows = new Map<Uri, TrackRowPending>();
+    for (const trackUri of staged.removed) rows.set(trackUri, 'remove');
+    for (const track of staged.added) rows.set(track.uri, 'add');
+    return rows;
+  }, [staged]);
+
+  const pendingLabels = useMemo(
+    () => ({ add: t('album.pendingAddition'), remove: t('album.pendingRemoval') }),
+    [t],
+  );
+
+  /** Already staged for this album, so the picker must not offer them again. */
+  const stagedUris = useMemo(
+    () => new Set(staged.added.map((track) => track.uri)),
+    [staged.added],
+  );
+
+  const pendingCount = staged.removed.size + staged.added.length;
+  const guard = useUnsavedGuard(pendingCount > 0);
+
+  const addToPlaylist = useAddToPlaylistItems(tracks);
+  const addToPack = useAddToPackItems(tracks);
 
   useEffect(() => {
     if (data) document.title = `${data.name} · Ritmo`;
@@ -406,40 +444,75 @@ export function AlbumView(): ReactElement {
     })();
   }, [data, tracks, toast, t, registry, library, refresh]);
 
-  /** Both album edits change what the page and the album lists should show. */
-  const afterAlbumEdit = useCallback(() => {
-    album.reload();
-    void refresh();
-  }, [album, refresh]);
+  /**
+   * A track the user took off the album, or put back. A row staged as an
+   * addition is dropped outright: there is nothing to write either way.
+   */
+  const toggleRemoval = useCallback((track: Track) => {
+    setStaged((prev) => {
+      if (prev.added.some((staged) => staged.uri === track.uri)) {
+        return { removed: prev.removed, added: prev.added.filter((s) => s.uri !== track.uri) };
+      }
+      const removed = new Set(prev.removed);
+      if (removed.has(track.uri)) removed.delete(track.uri);
+      else removed.add(track.uri);
+      return { removed, added: prev.added };
+    });
+  }, []);
 
-  const removeFromAlbum = useCallback(
-    (track: Track) => {
-      void (async () => {
-        try {
-          await library.repo.setTrackAlbum(track.uri, undefined);
-          toast.toast({ title: t('album.removedFromAlbum'), tone: 'success' });
-          afterAlbumEdit();
-        } catch (e: unknown) {
-          toast.toast({
-            title: t('album.removeFromAlbumFailed'),
-            body: errorBody(e),
-            tone: 'danger',
-            durationMs: 6000,
-          });
-        }
-      })();
-    },
-    [afterAlbumEdit, library, t, toast],
-  );
+  const onTracksPicked = useCallback((picked: Track[]) => {
+    setPicking(false);
+    setStaged((prev) => {
+      const known = new Set(prev.added.map((track) => track.uri));
+      const fresh = picked.filter((track) => !known.has(track.uri));
+      if (fresh.length === 0) return prev;
+      const removed = new Set(prev.removed);
+      for (const track of fresh) removed.delete(track.uri);
+      return { removed, added: [...prev.added, ...fresh] };
+    });
+  }, []);
 
-  const onTracksAdded = useCallback(
-    (count: number) => {
-      setPicking(false);
-      toast.toast({ title: t('album.addTracksDone', { count }), tone: 'success' });
-      afterAlbumEdit();
-    },
-    [afterAlbumEdit, t, toast],
-  );
+  const discard = useCallback(() => setStaged(noEdits()), []);
+
+  /** Where the page goes once the album it was showing no longer exists. */
+  const leaveAlbum = useCallback(() => {
+    navigate('/library/albums', { replace: true });
+  }, [navigate]);
+
+  const save = useCallback(() => {
+    if (!data || saving || pendingCount === 0) return;
+    const target = { uri: data.uri, name: data.name };
+    const removals = [...staged.removed];
+    const additions = staged.added.map((track) => track.uri);
+    setSaving(true);
+    void (async () => {
+      try {
+        for (const trackUri of removals) await library.repo.setTrackAlbum(trackUri, undefined);
+        for (const trackUri of additions) await library.repo.setTrackAlbum(trackUri, target);
+        // Emptying an album leaves its row behind holding nothing, which is what
+        // kept the Library counting an album the user had already cleared out.
+        await library.repo.vacuumOrphans();
+        setStaged(noEdits());
+        toast.toast({ title: t('album.changesSaved'), tone: 'success' });
+        void refresh();
+        // Removing the last track deletes the album with it, and re-reading a
+        // row that is gone would leave the old list on screen.
+        if ((await library.repo.getAlbum(target.uri)) === undefined) leaveAlbum();
+        else album.reload();
+      } catch (e: unknown) {
+        toast.toast({
+          title: t('album.changesFailed'),
+          body: errorBody(e),
+          tone: 'danger',
+          durationMs: 6000,
+        });
+      } finally {
+        setSaving(false);
+      }
+    })();
+  }, [album, data, leaveAlbum, library, pendingCount, refresh, saving, staged, t, toast]);
+
+  const { request: requestDelete, dialog: deleteDialog } = useDeleteAlbum(leaveAlbum);
 
   const rowMenuItems = useCallback(
     (track: Track): MenuItemSpec[] => {
@@ -450,12 +523,13 @@ export function AlbumView(): ReactElement {
         { id: 'add-pack', label: t('pack.addTo'), items: addToPack },
       ];
       if (editable) {
+        const undoes = pendingRows.get(track.uri) === 'remove';
         items.push({
           id: 'remove-from-album',
-          label: t('album.removeFromAlbum'),
-          danger: true,
+          label: undoes ? t('album.keepInAlbum') : t('album.removeFromAlbum'),
+          danger: !undoes,
           separatorBefore: true,
-          onSelect: () => removeFromAlbum(track),
+          onSelect: () => toggleRemoval(track),
         });
       }
       items.push(...editItems(track));
@@ -464,7 +538,7 @@ export function AlbumView(): ReactElement {
       if (editable) items.push(...removeItems(track));
       return items;
     },
-    [addToPack, addToPlaylist, editItems, editable, queue, removeFromAlbum, removeItems, t],
+    [addToPack, addToPlaylist, editItems, editable, pendingRows, queue, removeItems, t, toggleRemoval],
   );
 
   const copyLink = useCallback(() => {
@@ -504,8 +578,33 @@ export function AlbumView(): ReactElement {
       },
     });
     items.push({ id: 'copy', label: t('common.copyLink'), onSelect: copyLink });
+    if (editable) {
+      items.push({
+        id: 'delete-album',
+        label: t('album.deleteAlbum'),
+        icon: Trash,
+        danger: true,
+        separatorBefore: true,
+        // The stored track list, not the staged one: what is on disk in the
+        // database is what the delete has to account for.
+        onSelect: () => requestDelete({ uri: data.uri, name: data.name }, stored),
+      });
+    }
     return items;
-  }, [data, t, queue, tracks, addToPlaylist, host, download, navigate, copyLink, editable]);
+  }, [
+    data,
+    t,
+    queue,
+    tracks,
+    stored,
+    addToPlaylist,
+    host,
+    download,
+    navigate,
+    copyLink,
+    editable,
+    requestDelete,
+  ]);
 
   const eyebrow = useMemo(() => {
     switch ((data?.albumType ?? 'album').toLowerCase()) {
@@ -570,6 +669,26 @@ export function AlbumView(): ReactElement {
     .filter((part): part is string => part !== undefined)
     .join(' · ');
 
+  const tableProps = {
+    columns: COLUMNS,
+    hideAlbum: true,
+    currentUri,
+    playing: isPlaying,
+    likedSet: likedUris,
+    offlineSet: offlineUris,
+    menuItemsFor: rowMenuItems,
+    onToggleLike: (track: Track) => void useLibraryStore.getState().toggleLike(track),
+    ...(editable
+      ? {
+          onRemoveTrack: toggleRemoval,
+          removeLabel: t('album.removeFromAlbum'),
+          restoreLabel: t('album.keepInAlbum'),
+          pendingRows,
+          pendingLabels,
+        }
+      : {}),
+  };
+
   return (
     <div className="flex flex-col gap-8 pb-12">
       <EntityHero
@@ -589,63 +708,59 @@ export function AlbumView(): ReactElement {
 
       <div className="flex flex-col gap-8 px-6">
         {editable ? (
-          <div className="flex min-w-0 items-center gap-3">
-            <h2 className="rule-label min-w-0 flex-1 truncate">{t('album.tracks')}</h2>
-            <Button
-              variant="outline"
-              size="sm"
-              leading={Plus}
-              className="shrink-0"
-              onClick={() => setPicking(true)}
-            >
-              {t('album.addTracks')}
-            </Button>
+          <div className="flex min-w-0 flex-col gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <h2 className="rule-label min-w-0 flex-1 truncate">{t('album.tracks')}</h2>
+              <Button
+                variant="outline"
+                size="sm"
+                leading={Plus}
+                className="shrink-0"
+                onClick={() => setPicking(true)}
+              >
+                {t('album.addTracks')}
+              </Button>
+            </div>
+
+            {pendingCount > 0 ? (
+              <div className="tile flex min-w-0 items-center gap-3 rounded-md px-3 py-2">
+                <p className="mono min-w-0 flex-1 truncate text-[12px] text-text-dim">
+                  {pendingCount === 1
+                    ? t('album.pendingChange')
+                    : t('album.pendingChanges', { count: pendingCount })}
+                </p>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={discard} disabled={saving}>
+                    {t('album.discardChanges')}
+                  </Button>
+                  <Button variant="primary" size="sm" loading={saving} onClick={save}>
+                    {t('album.saveChanges')}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
         {tracks.length === 0 ? (
           <EmptyState
             icon={Music}
-            title={t('album.emptyTracks')}
-            body={t('album.emptyTracksBody')}
+            title={editable ? t('album.emptyLocalTracks') : t('album.emptyTracks')}
+            body={editable ? t('album.emptyLocalTracksBody') : t('album.emptyTracksBody')}
             action={
               editable ? { label: t('album.addTracks'), onClick: () => setPicking(true) } : undefined
             }
           />
         ) : discs === undefined ? (
-          <TrackTable
-            tracks={tracks}
-            columns={COLUMNS}
-            hideAlbum
-            currentUri={currentUri}
-            playing={isPlaying}
-            likedSet={likedUris}
-            offlineSet={offlineUris}
-            onPlay={play}
-            onToggleLike={(track) => void useLibraryStore.getState().toggleLike(track)}
-            menuItemsFor={rowMenuItems}
-            {...(editable
-              ? { onRemoveTrack: removeFromAlbum, removeLabel: t('album.removeFromAlbum') }
-              : {})}
-          />
+          <TrackTable tracks={tracks} onPlay={play} {...tableProps} />
         ) : (
           discs.map((group) => (
             <section key={`${group.disc}-${group.offset}`} className="flex flex-col gap-2">
               <h2 className="rule-label">{t('album.disc', { number: group.disc })}</h2>
               <TrackTable
                 tracks={group.tracks}
-                columns={COLUMNS}
-                hideAlbum
-                currentUri={currentUri}
-                playing={isPlaying}
-                likedSet={likedUris}
-                offlineSet={offlineUris}
                 onPlay={(index) => play(group.offset + index)}
-                onToggleLike={(track) => void useLibraryStore.getState().toggleLike(track)}
-                menuItemsFor={rowMenuItems}
-                {...(editable
-                  ? { onRemoveTrack: removeFromAlbum, removeLabel: t('album.removeFromAlbum') }
-                  : {})}
+                {...tableProps}
               />
             </section>
           ))
@@ -653,13 +768,33 @@ export function AlbumView(): ReactElement {
 
         {editDialog}
         {removeDialog}
+        {deleteDialog}
         {picking ? (
           <AddTracksDialog
             album={{ uri: data.uri, name: data.name }}
+            excluded={stagedUris}
             onClose={() => setPicking(false)}
-            onAdded={onTracksAdded}
+            onPick={onTracksPicked}
           />
         ) : null}
+
+        <Modal
+          open={guard.asking}
+          onClose={guard.stay}
+          size="sm"
+          title={t('album.leaveTitle')}
+          description={t('album.leaveBody')}
+          actions={
+            <>
+              <Button variant="ghost" onClick={guard.stay}>
+                {t('album.stayAction')}
+              </Button>
+              <Button variant="danger" onClick={guard.leave}>
+                {t('album.leaveAction')}
+              </Button>
+            </>
+          }
+        />
 
         <p className="mono text-[11px] leading-relaxed text-text-faint">
           {t('album.providerLine', { provider: providerName })}

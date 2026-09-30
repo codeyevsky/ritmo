@@ -415,6 +415,58 @@ describe('setTrackAlbum', () => {
   });
 });
 
+describe('vacuumOrphans', () => {
+  async function albumUris(): Promise<string[]> {
+    const rows = await host.db.query('SELECT uri FROM albums ORDER BY uri ASC');
+    return rows.map((row) => String(row.uri));
+  }
+
+  it('deletes a local album once its last track has left it', async () => {
+    await repo.upsertTracks([track('a')]);
+    await repo.setTrackAlbum('local:track:a', undefined);
+
+    expect(await albumUris()).toEqual(['local:album:alb-a']);
+
+    await repo.vacuumOrphans();
+
+    expect(await albumUris()).toEqual([]);
+    // The track itself is not what was orphaned; it stays, with no album.
+    expect((await repo.getTrack('local:track:a'))?.album).toBeUndefined();
+    expect((await repo.stats()).albums).toBe(0);
+  });
+
+  it('keeps a local album that still holds a track', async () => {
+    const album = { uri: 'local:album:one', name: 'Bir' };
+    await repo.upsertTracks([track('a', { album }), track('b', { album })]);
+    await repo.setTrackAlbum('local:track:a', undefined);
+
+    await repo.vacuumOrphans();
+
+    expect(await albumUris()).toEqual(['local:album:one']);
+  });
+
+  it('keeps a liked local album the user emptied on purpose', async () => {
+    await repo.upsertTracks([track('a')]);
+    await host.db.execute("INSERT INTO likes (uri, kind, liked_at) VALUES (?, 'album', 1)", [
+      'local:album:alb-a',
+    ]);
+    await repo.setTrackAlbum('local:track:a', undefined);
+
+    await repo.vacuumOrphans();
+
+    expect(await albumUris()).toEqual(['local:album:alb-a']);
+  });
+
+  it('never prunes a remote album, whose rows are the provider\'s', async () => {
+    await repo.upsertTracks([track('audius:track:a')]);
+    await repo.removeTracks(['audius:track:a']);
+
+    await repo.vacuumOrphans();
+
+    expect(await albumUris()).toEqual(['audius:album:alb-a']);
+  });
+});
+
 describe('removeTracks', () => {
   const A = 'local:track:a';
   const B = 'local:track:b';

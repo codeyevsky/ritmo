@@ -73,6 +73,9 @@ export function useRemoveFromLibrary(): LibraryRemover {
       void (async () => {
         try {
           await repo.removeTracks(list.map((track) => track.uri));
+          // Their album may have just lost its last track, and a local album
+          // with none left is a row the Library would go on counting.
+          await repo.vacuumOrphans();
           setGone((prev) => {
             const next = new Set(prev);
             for (const track of list) next.add(track.uri);

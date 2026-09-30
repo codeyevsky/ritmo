@@ -179,8 +179,11 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
   isOffline: (uri) => get().offlineUris.has(uri),
 
   startScan: async (folders) => {
-    const local = bindings?.host.localLibrary;
-    if (!local || get().scanning || folders.length === 0) return undefined;
+    const deps = bindings;
+    const local = deps?.host.localLibrary;
+    if (deps === undefined || local === undefined || get().scanning || folders.length === 0) {
+      return undefined;
+    }
 
     set({
       scanning: true,
@@ -191,6 +194,9 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
 
     try {
       const result = await local.scan(folders, (p) => set({ scan: p }));
+      // A scan prunes the files that are gone, which can leave a local album
+      // row behind with no tracks pointing at it.
+      await deps.library.repo.vacuumOrphans();
       set({ scanning: false, scan: undefined, lastScan: result });
       await get().invalidate();
       return result;
